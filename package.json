@@ -1,0 +1,39 @@
+{
+  "name": "kr-company-narascreen",
+  "version": "0.1.0",
+  "description": "Preliminary risk screening CLI for Korean public procurement service vendors.",
+  "type": "module",
+  "bin": {
+    "narascreen": "./bin/narascreen.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check bin/narascreen.js && node --test"
+  },
+  "keywords": [
+    "korea",
+    "procurement",
+    "narajangteo",
+    "g2b",
+    "business-registration",
+    "vendor-risk",
+    "public-sector",
+    "startup"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}
