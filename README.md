@@ -40,6 +40,11 @@ English summary:
 - Whether DART public filing enrichment is needed
 - Follow-up evidence checklist
 
+Each flag also includes:
+
+- `explanation`: why the issue matters in a procurement/vendor-review context
+- `nextAction`: what the reviewer should ask for or verify next
+
 ## Quick Start
 
 Clone and run locally:
@@ -56,6 +61,8 @@ Generate sample input:
 node ./bin/narascreen.js sample > vendors.csv
 node ./bin/narascreen.js screen vendors.csv --out report.md
 ```
+
+See [docs/sample-report.md](docs/sample-report.md) for an example Markdown report.
 
 After npm publishing, the intended usage is:
 
@@ -100,11 +107,26 @@ business_number,company_name,credit_rating,current_assets,current_liabilities,to
 
 ```bash
 narascreen sample
+narascreen profiles
 narascreen checksum 123-45-67891
 narascreen screen vendors.csv --out report.md
 narascreen screen vendors.csv --format json
 narascreen screen vendors.csv --format csv
+narascreen screen vendors.csv --profile it-service
 narascreen screen vendors.csv --nts --service-key <data.go.kr-key>
+```
+
+## Screening Profiles
+
+Profiles tune thresholds without changing the underlying data model.
+
+- `public-service`: default profile for Korean public procurement service vendors
+- `it-service`: slightly stricter profile for IT/SI projects where track record, leverage, and buyer concentration may need earlier review
+
+List profiles:
+
+```bash
+narascreen profiles
 ```
 
 ## Output Levels
@@ -134,6 +156,8 @@ Use `--fail-on-red` in automation when red flags should stop a workflow.
 ```bash
 narascreen screen vendors.csv --fail-on-red
 ```
+
+Reports include the issue code, severity, explanation, and next action. This keeps the tool framed as a pre-screening aid rather than an automatic procurement decision engine.
 
 ## Programmatic Use
 
@@ -185,6 +209,10 @@ English roadmap:
 - Procurement rule profiles by evaluation type
 - GitHub Action or cron-based recurring vendor monitoring
 - HTML reports and Slack notifications
+
+## Release Notes
+
+See [CHANGELOG.md](CHANGELOG.md). Local release checklist is in [docs/release.md](docs/release.md).
 
 ## License
 

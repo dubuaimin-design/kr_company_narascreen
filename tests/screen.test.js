@@ -46,4 +46,55 @@ test("flags weak financials and dependency as red", () => {
   assert.equal(screening.summary.red, 1);
   assert.equal(screening.results[0].level, "red");
   assert.ok(screening.results[0].issues.some((issue) => issue.code === "HIGH_DEBT_RATIO"));
+  assert.ok(screening.results[0].issues.every((issue) => issue.explanation));
+  assert.ok(screening.results[0].issues.every((issue) => issue.nextAction));
+});
+
+test("supports stricter IT service profile", () => {
+  const vendor = normalizeVendor({
+    사업자번호: "222-33-44440",
+    업체명: "검토필요 데이터랩",
+    신용등급: "BBB0",
+    유동자산: "105000000",
+    유동부채: "100000000",
+    총부채: "170000000",
+    자본총계: "100000000",
+    공공계약수: "3",
+    최근계약일: "2024-07-01",
+    단일발주처의존도: "58"
+  });
+
+  const defaultScreening = screenVendors([vendor], {
+    generatedAt: "2026-01-01T00:00:00.000Z"
+  });
+  const itScreening = screenVendors([vendor], {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    profile: "it-service"
+  });
+
+  assert.equal(defaultScreening.results[0].issues.length, 0);
+  assert.equal(itScreening.results[0].level, "yellow");
+  assert.equal(itScreening.profile.id, "it-service");
+});
+
+test("keeps accumulated medium issues in yellow band below red threshold", () => {
+  const vendor = normalizeVendor({
+    사업자번호: "222-33-44440",
+    업체명: "검토필요 데이터랩",
+    신용등급: "BB+",
+    유동자산: "90000000",
+    유동부채: "100000000",
+    총부채: "190000000",
+    자본총계: "90000000",
+    공공계약수: "2",
+    최근계약일: "2024-05-01",
+    단일발주처의존도: "62"
+  });
+
+  const screening = screenVendors([vendor], {
+    generatedAt: "2026-06-05T00:00:00.000Z"
+  });
+
+  assert.equal(screening.results[0].riskScore, 75);
+  assert.equal(screening.results[0].level, "yellow");
 });

@@ -1,19 +1,27 @@
 import { scoreCreditRating } from "./rating.js";
+import { DEFAULT_PROFILE_ID, enrichIssue, resolveProfile } from "./rules.js";
 import { formatBusinessNumber, validateKoreanBusinessNumber } from "./validators.js";
 
 export function screenVendors(vendors, options = {}) {
   const ntsResultsByBusinessNumber = options.ntsResultsByBusinessNumber ?? new Map();
   const generatedAt = options.generatedAt ? new Date(options.generatedAt) : new Date();
+  const profile = resolveProfile(options.profile ?? DEFAULT_PROFILE_ID);
 
   const results = vendors.map((vendor) =>
     screenVendor(vendor, {
       generatedAt,
-      ntsResult: ntsResultsByBusinessNumber.get(vendor.businessNumber)
+      ntsResult: ntsResultsByBusinessNumber.get(vendor.businessNumber),
+      profile: profile.id
     })
   );
 
   return {
     generatedAt: generatedAt.toISOString(),
+    profile: {
+      id: profile.id,
+      label: profile.label,
+      description: profile.description
+    },
     summary: summarizeScreening(results),
     results
   };
@@ -21,6 +29,7 @@ export function screenVendors(vendors, options = {}) {
 
 export function screenVendor(vendor, options = {}) {
   const generatedAt = options.generatedAt ? new Date(options.generatedAt) : new Date();
+  const profile = resolveProfile(options.profile ?? DEFAULT_PROFILE_ID);
   const issues = [];
   const checklist = [];
   const metrics = {};
@@ -38,16 +47,16 @@ export function screenVendor(vendor, options = {}) {
   }
 
   applyCreditRating(issues, checklist, metrics, vendor.creditRating);
-  applyLiquidity(issues, checklist, metrics, vendor);
-  applyDebtRatio(issues, checklist, metrics, vendor);
-  applyProcurementTrackRecord(issues, checklist, metrics, vendor, generatedAt);
-  applyBuyerDependency(issues, checklist, metrics, vendor.singleBuyerDependencyPct);
+  applyLiquidity(issues, checklist, metrics, vendor, profile);
+  applyDebtRatio(issues, checklist, metrics, vendor, profile);
+  applyProcurementTrackRecord(issues, checklist, metrics, vendor, generatedAt, profile);
+  applyBuyerDependency(issues, checklist, metrics, vendor.singleBuyerDependencyPct, profile);
 
   if (!vendor.dartCorpCode) {
     checklist.push("DART 고유번호가 있는 법인은 공시 기반 재무비율 보강");
   }
 
-  const riskScore = calculateRiskScore(issues);
+  const riskScore = calculateRiskScore(issues, profile);
   const level = decideLevel(issues, riskScore);
 
   return {
@@ -57,6 +66,7 @@ export function screenVendor(vendor, options = {}) {
       formattedBusinessNumber: formatBusinessNumber(vendor.businessNumber),
       dartCorpCode: vendor.dartCorpCode || null
     },
+    profile: profile.id,
     level,
     riskScore,
     issues,
@@ -112,7 +122,7 @@ function applyCreditRating(issues, checklist, metrics, creditRating) {
   }
 }
 
-function applyLiquidity(issues, checklist, metrics, vendor) {
+function applyLiquidity(issues, checklist, metrics, vendor, profile) {
   if (vendor.currentAssets === null || vendor.currentLiabilities === null) {
     checklist.push("유동자산/유동부채 입력 후 단기 지급능력 확인");
     return;
@@ -127,14 +137,14 @@ function applyLiquidity(issues, checklist, metrics, vendor) {
   const ratio = (vendor.currentAssets / vendor.currentLiabilities) * 100;
   metrics.currentRatio = round(ratio);
 
-  if (ratio < 70) {
+  if (ratio < profile.thresholds.currentRatioHighRiskBelow) {
     addIssue(issues, "high", "LOW_CURRENT_RATIO", `유동비율이 ${round(ratio)}%로 낮습니다.`);
-  } else if (ratio < 100) {
-    addIssue(issues, "medium", "WATCH_CURRENT_RATIO", `유동비율이 ${round(ratio)}%로 100% 미만입니다.`);
+  } else if (ratio < profile.thresholds.currentRatioWatchBelow) {
+    addIssue(issues, "medium", "WATCH_CURRENT_RATIO", `유동비율이 ${round(ratio)}%로 프로파일 기준보다 낮습니다.`);
   }
 }
 
-function applyDebtRatio(issues, checklist, metrics, vendor) {
+function applyDebtRatio(issues, checklist, metrics, vendor, profile) {
   if (vendor.totalLiabilities === null || vendor.totalEquity === null) {
     checklist.push("부채총계/자본총계 입력 후 부채비율 확인");
     return;
@@ -149,14 +159,14 @@ function applyDebtRatio(issues, checklist, metrics, vendor) {
   const ratio = (vendor.totalLiabilities / vendor.totalEquity) * 100;
   metrics.debtRatio = round(ratio);
 
-  if (ratio > 400) {
+  if (ratio > profile.thresholds.debtRatioHighRiskAbove) {
     addIssue(issues, "high", "HIGH_DEBT_RATIO", `부채비율이 ${round(ratio)}%로 매우 높습니다.`);
-  } else if (ratio > 200) {
+  } else if (ratio > profile.thresholds.debtRatioWatchAbove) {
     addIssue(issues, "medium", "WATCH_DEBT_RATIO", `부채비율이 ${round(ratio)}%로 높습니다.`);
   }
 }
 
-function applyProcurementTrackRecord(issues, checklist, metrics, vendor, generatedAt) {
+function applyProcurementTrackRecord(issues, checklist, metrics, vendor, generatedAt, profile) {
   if (vendor.publicContractCount === null) {
     checklist.push("나라장터 계약/낙찰 이력 입력 또는 API 연동으로 수행실적 확인");
   } else {
@@ -180,12 +190,12 @@ function applyProcurementTrackRecord(issues, checklist, metrics, vendor, generat
   const daysAgo = Math.floor((generatedAt.getTime() - recentDate.getTime()) / 86_400_000);
   metrics.recentContractDaysAgo = daysAgo;
 
-  if (daysAgo > 730) {
-    addIssue(issues, "medium", "OLD_PUBLIC_CONTRACT", "최근 공공계약일이 2년보다 오래되었습니다.");
+  if (daysAgo > profile.thresholds.oldContractDays) {
+    addIssue(issues, "medium", "OLD_PUBLIC_CONTRACT", `최근 공공계약일이 ${profile.thresholds.oldContractDays}일보다 오래되었습니다.`);
   }
 }
 
-function applyBuyerDependency(issues, checklist, metrics, dependencyPct) {
+function applyBuyerDependency(issues, checklist, metrics, dependencyPct, profile) {
   if (dependencyPct === null) {
     checklist.push("특정 발주처 매출 의존도 확인");
     return;
@@ -193,33 +203,26 @@ function applyBuyerDependency(issues, checklist, metrics, dependencyPct) {
 
   metrics.singleBuyerDependencyPct = round(dependencyPct);
 
-  if (dependencyPct >= 80) {
+  if (dependencyPct >= profile.thresholds.buyerDependencyHighRiskAt) {
     addIssue(issues, "high", "HIGH_BUYER_DEPENDENCY", `단일 발주처 의존도가 ${round(dependencyPct)}%입니다.`);
-  } else if (dependencyPct >= 60) {
+  } else if (dependencyPct >= profile.thresholds.buyerDependencyWatchAt) {
     addIssue(issues, "medium", "WATCH_BUYER_DEPENDENCY", `단일 발주처 의존도가 ${round(dependencyPct)}%입니다.`);
   }
 }
 
 function addIssue(issues, severity, code, message) {
-  issues.push({ severity, code, message });
+  issues.push(enrichIssue({ severity, code, message }));
 }
 
-function calculateRiskScore(issues) {
-  const weights = {
-    high: 35,
-    medium: 15,
-    low: 5,
-    info: 0
-  };
-
+function calculateRiskScore(issues, profile) {
   return Math.min(
     100,
-    issues.reduce((score, issue) => score + (weights[issue.severity] ?? 0), 0)
+    issues.reduce((score, issue) => score + (profile.weights[issue.severity] ?? 0), 0)
   );
 }
 
 function decideLevel(issues, riskScore) {
-  if (issues.some((issue) => issue.severity === "high") || riskScore >= 60) {
+  if (issues.some((issue) => issue.severity === "high") || riskScore >= 80) {
     return "red";
   }
   if (issues.some((issue) => issue.severity === "medium") || riskScore >= 20) {

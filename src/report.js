@@ -6,6 +6,7 @@ export function generateMarkdownReport(screening, options = {}) {
     `# ${title}`,
     "",
     `Generated: ${screening.generatedAt}`,
+    `Profile: ${screening.profile?.label ?? screening.profile?.id ?? "unknown"}`,
     "",
     "This report is a preliminary screening aid. It does not replace credit rating, legal review, accounting review, or the procuring agency's official evaluation.",
     "",
@@ -18,13 +19,13 @@ export function generateMarkdownReport(screening, options = {}) {
     "",
     "## Vendor table",
     "",
-    "| Level | Score | Vendor | Business number | Main issues |",
-    "| --- | ---: | --- | --- | --- |"
+    "| Level | Score | Vendor | Business number | Main issues | Next action |",
+    "| --- | ---: | --- | --- | --- | --- |"
   ];
 
   for (const result of screening.results) {
     lines.push(
-      `| ${result.level.toUpperCase()} | ${result.riskScore} | ${escapeTable(result.vendor.companyName)} | ${escapeTable(result.vendor.formattedBusinessNumber)} | ${escapeTable(mainIssues(result))} |`
+      `| ${result.level.toUpperCase()} | ${result.riskScore} | ${escapeTable(result.vendor.companyName)} | ${escapeTable(result.vendor.formattedBusinessNumber)} | ${escapeTable(mainIssues(result))} | ${escapeTable(primaryNextAction(result))} |`
     );
   }
 
@@ -47,6 +48,8 @@ export function generateMarkdownReport(screening, options = {}) {
     } else {
       for (const issue of result.issues) {
         lines.push(`- [${issue.severity}] ${issue.code}: ${issue.message}`);
+        lines.push(`  - Why it matters: ${issue.explanation}`);
+        lines.push(`  - Next action: ${issue.nextAction}`);
       }
     }
 
@@ -88,6 +91,7 @@ export function generateCsvReport(screening) {
       dart_corp_code: result.vendor.dartCorpCode ?? "",
       issue_count: result.issues.length,
       issues: result.issues.map((issue) => `${issue.severity}:${issue.code}`).join("; "),
+      next_actions: result.issues.map((issue) => issue.nextAction).join("; "),
       checklist: result.checklist.join("; ")
     }))
   );
@@ -101,6 +105,13 @@ function mainIssues(result) {
     .slice(0, 3)
     .map((issue) => `${issue.severity}:${issue.code}`)
     .join(", ");
+}
+
+function primaryNextAction(result) {
+  if (result.issues.length === 0) {
+    return "none";
+  }
+  return result.issues[0].nextAction ?? "review source data";
 }
 
 function escapeTable(value) {

@@ -7,11 +7,12 @@ import {
   generateJsonReport,
   generateMarkdownReport
 } from "./report.js";
+import { DEFAULT_PROFILE_ID, listProfiles } from "./rules.js";
 import { SAMPLE_CSV } from "./sample.js";
 import { screenVendors } from "./screen.js";
 import { formatBusinessNumber, validateKoreanBusinessNumber } from "./validators.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 export async function runCli(argv, io = defaultIo()) {
   const parsed = parseArgs(argv);
@@ -31,6 +32,11 @@ export async function runCli(argv, io = defaultIo()) {
     return;
   }
 
+  if (parsed.command === "profiles") {
+    runProfiles(io);
+    return;
+  }
+
   if (parsed.command === "checksum") {
     runChecksum(parsed.values, io);
     return;
@@ -47,6 +53,7 @@ function parseArgs(argv) {
     out: "",
     format: "",
     nts: false,
+    profile: DEFAULT_PROFILE_ID,
     serviceKey: "",
     failOnRed: false,
     values: []
@@ -57,7 +64,7 @@ function parseArgs(argv) {
     return parsed;
   }
 
-  const knownCommands = new Set(["screen", "sample", "checksum", "help", "version"]);
+  const knownCommands = new Set(["screen", "sample", "profiles", "checksum", "help", "version"]);
   if (knownCommands.has(args[0])) {
     parsed.command = args.shift();
   }
@@ -72,6 +79,9 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--nts") {
       parsed.nts = true;
+    } else if (arg === "--profile") {
+      parsed.profile = requireValue(args, index, arg);
+      index += 1;
     } else if (arg === "--service-key") {
       parsed.serviceKey = requireValue(args, index, arg);
       index += 1;
@@ -112,7 +122,10 @@ async function runScreen(parsed, io) {
     ntsResultsByBusinessNumber = makeNtsResultMap(ntsResults);
   }
 
-  const screening = screenVendors(vendors, { ntsResultsByBusinessNumber });
+  const screening = screenVendors(vendors, {
+    ntsResultsByBusinessNumber,
+    profile: parsed.profile
+  });
   const format = normalizeFormat(parsed.format || inferFormat(parsed.out));
   const output = render(screening, format);
 
@@ -124,6 +137,12 @@ async function runScreen(parsed, io) {
 
   if (parsed.failOnRed && screening.summary.red > 0) {
     process.exitCode = 2;
+  }
+}
+
+function runProfiles(io) {
+  for (const profile of listProfiles()) {
+    io.stdout(`${profile.id}\t${profile.label}\t${profile.description}\n`);
   }
 }
 
@@ -193,14 +212,17 @@ Preliminary risk screening for Korean public procurement service vendors.
 
 Usage:
   narascreen sample
+  narascreen profiles
   narascreen checksum 123-45-67891
   narascreen screen vendors.csv --out report.md
   narascreen screen vendors.csv --format json
+  narascreen screen vendors.csv --profile it-service
   narascreen screen vendors.csv --nts --service-key <data.go.kr-key>
 
 Options:
   -o, --out <file>          Write report to a file
   -f, --format <md|json|csv> Report format
+  --profile <name>          Screening profile: public-service, it-service
   --nts                    Call NTS business status API
   --service-key <key>      data.go.kr NTS service key
   --service-key-env <name> Read service key from an environment variable

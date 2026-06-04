@@ -9,6 +9,14 @@ export {
   scoreCreditRating
 } from "./rating.js";
 export {
+  DEFAULT_PROFILE_ID,
+  ISSUE_GUIDANCE,
+  SCREENING_PROFILES,
+  enrichIssue,
+  listProfiles,
+  resolveProfile
+} from "./rules.js";
+export {
   screenVendor,
   screenVendors,
   summarizeScreening

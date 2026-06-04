@@ -1,8 +1,9 @@
 {
   "name": "kr-company-narascreen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Preliminary risk screening CLI for Korean public procurement service vendors.",
   "type": "module",
+  "main": "./src/index.js",
   "bin": {
     "narascreen": "./bin/narascreen.js"
   },
@@ -15,11 +16,15 @@
     "examples",
     "docs",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
     "test": "node --test",
-    "check": "node --check bin/narascreen.js && node --test"
+    "check": "node --check bin/narascreen.js && node --test",
+    "pack:dry-run": "npm pack --dry-run",
+    "smoke": "node ./bin/narascreen.js screen ./examples/vendors.sample.csv --format json",
+    "prepublishOnly": "npm run check && npm run pack:dry-run"
   },
   "keywords": [
     "korea",
@@ -31,8 +36,19 @@
     "public-sector",
     "startup"
   ],
-  "author": "",
+  "author": "dubuaimin-design",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dubuaimin-design/kr_company_narascreen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dubuaimin-design/kr_company_narascreen/issues"
+  },
+  "homepage": "https://github.com/dubuaimin-design/kr_company_narascreen#readme",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=20"
   }
